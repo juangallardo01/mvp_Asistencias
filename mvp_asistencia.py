@@ -1,59 +1,58 @@
 import cv2
-from datetime import datetime, timedelta
+import datetime
 import csv
 import os
 
-# Guardar el archivo en la misma carpeta del script
-archivo = os.path.join(os.path.dirname(__file__), "asistencias.csv")
+# Ruta absoluta de la carpeta donde está el script .py
+script_dir = os.path.dirname(os.path.abspath(__file__))
+filename = os.path.join(script_dir, "asistencias.csv")
 
-# Si no existe el archivo, crear encabezado con delimitador ";"
-if not os.path.exists(archivo):
-    with open(archivo, mode="w", newline="") as f:
-        writer = csv.writer(f, delimiter=';')
-        writer.writerow(["Fecha", "Hora", "Estudiante"])
+print(f"El archivo de asistencias se guardará en: {filename}")
 
-# Clasificador de rostros
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-
+# Inicializar la cámara
 cap = cv2.VideoCapture(0)
 
-student_count = 0
-ultimo_registro = datetime.min  # Control del tiempo
+# Cargar el clasificador de rostros de OpenCV
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+
+# Crear archivo si no existe y escribir encabezados
+if not os.path.isfile(filename):
+    with open(filename, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f, delimiter=";")  
+        writer.writerow(["Fecha", "Hora", "Estudiante"])
 
 while True:
     ret, frame = cap.read()
     if not ret:
-        print("No se pudo acceder a la cámara")
         break
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
-    for (x, y, w, h) in faces:
-        # Verificar si pasaron al menos 10 segundos desde el último registro
-        if datetime.now() - ultimo_registro > timedelta(seconds=10):
-            student_count += 1
-            nombre = f"Estudiante_{student_count}"
+    fecha_actual = datetime.date.today().strftime("%Y-%m-%d")
+    hora_actual = datetime.datetime.now().strftime("%H:%M:%S")
 
-            # Guardar en CSV con ";" como separador
-            fecha = datetime.now().strftime("%Y-%m-%d")
-            hora = datetime.now().strftime("%H:%M:%S")
-            with open(archivo, mode="a", newline="") as f:
-                writer = csv.writer(f, delimiter=';')
-                writer.writerow([fecha, hora, nombre])
+    # Dibujar las caras detectadas
+    for i, (x, y, w, h) in enumerate(faces):
+        estudiante_id = f"Estudiante_{i+1}"
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        cv2.putText(frame, estudiante_id, (x, y - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-            print(f"Asistencia registrada: {nombre} - {fecha} {hora}")
-            ultimo_registro = datetime.now()
-        else:
-            nombre = "Esperando..."
+    cv2.imshow("Registro de Asistencia", frame)
 
-        # Dibujar rectángulo y nombre en pantalla
-        cv2.rectangle(frame, (x,y), (x+w, y+h), (0,255,0), 2)
-        cv2.putText(frame, nombre, (x,y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
+    # Guardar registros al presionar ESPACIO
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord(" "):
+        with open(filename, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f, delimiter=";")  # <-- usar punto y coma
+            for i in range(len(faces)):
+                estudiante_id = f"Estudiante_{i+1}"
+                writer.writerow([fecha_actual, hora_actual, estudiante_id])
+        print(f"{len(faces)} registros guardados en el archivo.")
 
-    cv2.imshow('Prototipo Asistencia', frame)
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    # Salir con "q"
+    if key == ord("q"):
         break
 
 cap.release()
